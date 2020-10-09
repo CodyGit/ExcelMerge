@@ -88,7 +88,8 @@ namespace ExcelMerge.GUI.Views
             var args = new DiffViewEventArgs<FastGridControl>(null, container, TargetType.First);
             DataGridEventDispatcher.Instance.DispatchParentLoadEvent(args);
 
-            ExecuteDiff(isStartup: true);
+            // ExecuteDiff(isStartup: true);
+            LoopToDiff();
 
             // In order to enable Ctrl + F immediately after startup.
             ToolExpander.IsExpanded = false;
@@ -430,6 +431,68 @@ namespace ExcelMerge.GUI.Views
             return diff;
         }
 
+        private void LoopToDiff()
+        {
+            if (!File.Exists(SrcPathTextBox.Text) || !File.Exists(DstPathTextBox.Text))
+                return;
+            bool isStartup = true;
+            var args = new DiffViewEventArgs<FastGridControl>(null, container, TargetType.First);
+            DataGridEventDispatcher.Instance.DispatchPreExecuteDiffEvent(args);
+            var workbooks = ReadWorkbooks();
+            var srcWorkbook = workbooks.Item1;
+            var dstWorkbook = workbooks.Item2;
+
+            var fileSettings = FindFileSettings(isStartup);
+            var srcFileSetting = fileSettings.Item1;
+            var dstFileSetting = fileSettings.Item2;
+
+            for (var item in srcWorkbook.Sheets){
+                var srcSheet = srcWorkbook.Sheets[item.Key];
+                var dstSheet = dstWorkbook.Sheets[item.Key];
+                //TODO select to item.Key item.Value
+                SrcSheetCombobox.Text = item.Key;
+                DstSheetCombobox.Text = item.Key;
+                if (srcSheet.Column.Count > 300 || dstSheet.Column.Count > 300){
+                    MessageBox.Show("More than 300 columns ");
+                    break;
+                }
+                if (srcSheet.Rows.Count > 10000 || dstSheet.Rows.Count > 10000){
+                    MessageBox.Show(Properties.Resources.Msg_WarnSize);
+                    break;
+                }
+                var diff = ExecuteDiff(srcSheet, dstSheet);
+                var summary = diff.CreateSummary();
+                if(!summary.HasDiff){
+                    continue;
+                } else {
+                    SrcDataGrid.Model = new DiffGridModel(diff, DiffType.Source);
+                    DstDataGrid.Model = new DiffGridModel(diff, DiffType.Dest);
+
+                    args = new DiffViewEventArgs<FastGridControl>(SrcDataGrid, container);
+                    DataGridEventDispatcher.Instance.DispatchFileSettingUpdateEvent(args, srcFileSetting);
+
+                    args = new DiffViewEventArgs<FastGridControl>(DstDataGrid, container);
+                    DataGridEventDispatcher.Instance.DispatchFileSettingUpdateEvent(args, dstFileSetting);
+
+                    args = new DiffViewEventArgs<FastGridControl>(null, container, TargetType.First);
+                    DataGridEventDispatcher.Instance.DispatchDisplayFormatChangeEvent(args, ShowOnlyDiffRadioButton.IsChecked.Value);
+                    DataGridEventDispatcher.Instance.DispatchPostExecuteDiffEvent(args);
+
+                    GetViewModel().UpdateDiffSummary(summary);
+
+                    if (!App.Instance.KeepFileHistory)
+                        App.Instance.UpdateRecentFiles(SrcPathTextBox.Text, DstPathTextBox.Text);
+
+                    if (App.Instance.Setting.NotifyEqual && !summary.HasDiff)
+                        MessageBox.Show(Properties.Resources.Message_NoDiff);
+
+                    if (App.Instance.Setting.FocusFirstDiff)
+                        MoveNextModifiedCell();
+                    break;
+                }
+            }
+        }
+
         private void ExecuteDiff(bool isStartup = false)
         {
             if (!File.Exists(SrcPathTextBox.Text) || !File.Exists(DstPathTextBox.Text))
@@ -451,6 +514,11 @@ namespace ExcelMerge.GUI.Views
 
             var srcSheet = srcWorkbook.Sheets[SrcSheetCombobox.SelectedItem.ToString()];
             var dstSheet = dstWorkbook.Sheets[DstSheetCombobox.SelectedItem.ToString()];
+
+
+            if (srcSheet.Column.Count > 300 || dstSheet.Column.Count > 300){
+                MessageBox.Show("More than 300 columns ");
+            }
 
             if (srcSheet.Rows.Count > 10000 || dstSheet.Rows.Count > 10000)
                 MessageBox.Show(Properties.Resources.Msg_WarnSize);
