@@ -149,9 +149,14 @@ namespace ExcelMerge.GUI.Views
         {
             var args = new DiffViewEventArgs<FastGridControl>(null, container, TargetType.First);
             DataGridEventDispatcher.Instance.DispatchParentLoadEvent(args);
-
-            // ExecuteDiff(isStartup: true);
-            LoopToDiff();
+            // 改ui太复杂，复用「Show dialog if no diff」
+            // NotifyEqual = false 时直接索引到有diff的sheet
+            // NotifyEqual = true 保持原有逻辑
+            if (App.Instance.Setting.NotifyEqual){
+                ExecuteDiff(isStartup: true);
+            } else {
+                LoopToDiff();
+            }
             // In order to enable Ctrl + F immediately after startup.
             ToolExpander.IsExpanded = false;
         }
@@ -663,11 +668,13 @@ namespace ExcelMerge.GUI.Views
             }
 
             var summary = diff.CreateSummary();
-            if(isStartup){
-                if (summary.HasDiff){
-                    isDiff = true;
-                } else {
-                    return;
+            if (!App.Instance.Setting.NotifyEqual){
+                if(isStartup){
+                    if (summary.HasDiff){
+                        isDiff = true;
+                    } else {
+                        return;
+                    }
                 }
             }
 
