@@ -663,7 +663,7 @@ namespace ExcelMerge.GUI.Views
             }
 
             var summary = diff.CreateSummary();
-            if(isStartup && !summary.HasDiff){
+            if(isStartup){
                 if (summary.HasDiff){
                     isDiff = true;
                 } else {
