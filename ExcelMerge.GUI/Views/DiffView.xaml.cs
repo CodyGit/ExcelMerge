@@ -28,6 +28,7 @@ namespace ExcelMerge.GUI.Views
         private const string srcKey = "src";
         private const string dstKey = "dst";
         private bool isLock = false;
+        private bool isDiff = false;
 
         private FastGridControl copyTargetGrid;
 
@@ -149,8 +150,8 @@ namespace ExcelMerge.GUI.Views
             var args = new DiffViewEventArgs<FastGridControl>(null, container, TargetType.First);
             DataGridEventDispatcher.Instance.DispatchParentLoadEvent(args);
 
-            ExecuteDiff(isStartup: true);
-
+            // ExecuteDiff(isStartup: true);
+            LoopToDiff();
             // In order to enable Ctrl + F immediately after startup.
             ToolExpander.IsExpanded = false;
         }
@@ -560,6 +561,32 @@ namespace ExcelMerge.GUI.Views
             }
         }
 
+        private void LoopToDiff()
+        {
+            ExecuteDiff(isStartup: true);
+            while(true){
+                if(isDiff){
+                    return;
+                } else {
+                    if (isLock){
+                        return;
+                    }
+
+                    if (SrcSheetCombobox.SelectedIndex + 1 >= SrcSheetCombobox.Items.Count ||
+                        DstSheetCombobox.SelectedIndex + 1 >= DstSheetCombobox.Items.Count)
+                    {
+                        return;
+                    }
+                    isLock = true;
+                    SrcSheetCombobox.SelectedIndex = SrcSheetCombobox.SelectedIndex + 1;
+                    diffConfig.SrcSheetIndex = SrcSheetCombobox.SelectedIndex;
+                    DstSheetCombobox.SelectedIndex = DstSheetCombobox.SelectedIndex + 1;
+                    diffConfig.DstSheetIndex = DstSheetCombobox.SelectedIndex;
+                    ExecuteDiff(useCache: true, isStartup: true);
+                    isLock = false;
+                }
+            }
+        }
         private void ExecuteDiff(bool isStartup = false, bool useCache = false, ExcelSheetDiff specificSheetDiff = null)
         {
             //if (!File.Exists(SrcPathTextBox.Text) || !File.Exists(DstPathTextBox.Text))
@@ -635,6 +662,15 @@ namespace ExcelMerge.GUI.Views
                 }
             }
 
+            var summary = diff.CreateSummary();
+            if(isStartup && !summary.HasDiff){
+                if (summary.HasDiff){
+                    isDiff = true;
+                } else {
+                    return;
+                }
+            }
+
             SrcSheetCombobox.SelectedIndex = GetViewModel().GetSrcSheetIndex(diff.SrcSheet.Name);
             DstSheetCombobox.SelectedIndex = GetViewModel().GetDstSheetIndex(diff.DstSheet.Name);
 
@@ -653,7 +689,6 @@ namespace ExcelMerge.GUI.Views
             DataGridEventDispatcher.Instance.DispatchDisplayFormatChangeEvent(args, ShowOnlyDiffRadioButton.IsChecked.Value);
             DataGridEventDispatcher.Instance.DispatchPostExecuteDiffEvent(args);
 
-            var summary = diff.CreateSummary();
             GetViewModel().UpdateDiffSummary(summary);
 
             if (!App.Instance.KeepFileHistory)
